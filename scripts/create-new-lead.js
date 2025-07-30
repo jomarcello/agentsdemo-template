@@ -9,8 +9,8 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Configuration
-const GITHUB_ORG = 'jomarcello';
+// Configuration  
+const GITHUB_USER = 'jomarcello';
 const RAILWAY_TOKEN = process.env.RAILWAY_TOKEN;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
@@ -57,7 +57,7 @@ function main() {
     
     console.log('');
     console.log('✅ SUCCESS! New practice lead created:');
-    console.log(`🔗 GitHub: https://github.com/${GITHUB_ORG}/${repoName}`);
+    console.log(`🔗 GitHub: https://github.com/${GITHUB_USER}/${repoName}`);
     console.log(`🚂 Railway: https://railway.app/project/${railwayProjectId}`);
     console.log(`🌐 Expected URL: https://${practiceId}-demo-production.up.railway.app`);
     console.log('');
@@ -78,15 +78,21 @@ function createGitHubRepo(repoName, practiceName) {
   };
 
   try {
-    execSync(`curl -s -H "Authorization: token ${GITHUB_TOKEN}" \\
+    const response = execSync(`curl -s -H "Authorization: token ${GITHUB_TOKEN}" \\
       -H "Accept: application/vnd.github.v3+json" \\
       -d '${JSON.stringify(repoData)}' \\
-      https://api.github.com/orgs/${GITHUB_ORG}/repos`, 
-      { stdio: 'inherit' }
+      https://api.github.com/user/repos`, 
+      { encoding: 'utf8' }
     );
+    
+    const responseData = JSON.parse(response);
+    if (responseData.message && responseData.message.includes('Not Found')) {
+      throw new Error('GitHub API error: ' + response);
+    }
+    
     console.log(`✅ Created repository: ${repoName}`);
   } catch (error) {
-    if (error.message.includes('already exists')) {
+    if (error.message.includes('already exists') || error.message.includes('name already exists')) {
       console.log(`⚠️  Repository ${repoName} already exists, continuing...`);
     } else {
       throw error;
@@ -284,10 +290,23 @@ function setRailwayEnvVar(serviceId, name, value) {
 }
 
 function pushToGitHub(repoName) {
-  execSync(`git remote add origin https://github.com/${GITHUB_ORG}/${repoName}.git`);
+  execSync(`git remote add origin https://${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${repoName}.git`);
   execSync('git branch -M main');
   execSync(`git push -u origin main`);
   console.log('✅ Pushed to GitHub');
+  
+  // Trigger Railway deployment with a dummy commit
+  setTimeout(() => {
+    try {
+      fs.writeFileSync('.railway-deploy', `# Railway deployment trigger\n# Generated: ${new Date().toISOString()}\n`);
+      execSync('git add .railway-deploy');
+      execSync('git commit -m "🚀 Trigger Railway deployment"');
+      execSync('git push');
+      console.log('✅ Triggered Railway deployment');
+    } catch (error) {
+      console.log('⚠️  Could not trigger automatic deployment - manual setup required');
+    }
+  }, 2000);
 }
 
 // Check required environment variables
