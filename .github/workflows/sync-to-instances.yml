@@ -1,0 +1,69 @@
+name: Sync Template to Practice Instances
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      practice_repos:
+        description: 'Comma-separated list of practice repos to sync (leave empty for all)'
+        required: false
+        type: string
+
+jobs:
+  sync-template:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        practice:
+          - { repo: "barcelona-wellness-demo", practice_id: "barcelona-wellness-clinic" }
+          - { repo: "advanced-spine-demo", practice_id: "advanced-spine-care" }
+          - { repo: "smith-chiropractic-demo", practice_id: "smith" }
+          # Add more practice repos here
+    steps:
+      - name: Checkout template
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Sync to practice repository
+        run: |
+          # Clone the practice repository
+          git clone https://${{ secrets.TEMPLATE_SYNC_TOKEN }}@github.com/jomarcello/${{ matrix.practice.repo }}.git practice-repo
+          
+          cd practice-repo
+          
+          # Configure git
+          git config user.name "Template Sync Bot"
+          git config user.email "bot@agentsdemo.com"
+          
+          # Create sync branch
+          git checkout -b template-sync-$(date +%s) || git checkout main
+          
+          # Sync template files (excluding practice-specific configs)
+          rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env*' \
+                   --exclude='railway.toml' --exclude='README.md' \
+                   ../ ./
+          
+          # Create/update .env with practice-specific configuration
+          echo "PRACTICE_ID=${{ matrix.practice.practice_id }}" > .env.local
+          echo "NODE_ENV=production" >> .env.local
+          
+          # Update package.json name
+          sed -i 's/"name": "agentsdemo-template"/"name": "${{ matrix.practice.repo }}"/g' package.json
+          
+          # Commit changes if any
+          if ! git diff --quiet; then
+            git add .
+            git commit -m "🔄 Sync from template - $(date)"
+            git push origin HEAD --force
+            
+            echo "✅ Synced template to ${{ matrix.practice.repo }}"
+          else
+            echo "📋 No changes to sync for ${{ matrix.practice.repo }}"
+          fi

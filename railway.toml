@@ -1,0 +1,20 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "never"
+
+[env]
+# Practice ID will be set per deployment
+PRACTICE_ID = { default = "advanced-spine-care" }
+NODE_ENV = { default = "production" }
+PORT = { default = "3000" }
+
+# API Keys - set these in Railway dashboard
+OPENAI_API_KEY = { default = "" }
+ELEVENLABS_API_KEY = { default = "" }
+
+[experimental]
+configPaths = ["railway.toml"]
